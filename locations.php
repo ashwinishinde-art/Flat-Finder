@@ -2,7 +2,7 @@
 session_start();
 include("../includes/db.php");
 
-// Admin Login Check
+// Check Admin Login
 if(!isset($_SESSION['role']) || $_SESSION['role']!="admin")
 {
     header("Location: ../login.php");
@@ -11,32 +11,22 @@ if(!isset($_SESSION['role']) || $_SESSION['role']!="admin")
 
 $search="";
 
-$sql="SELECT bookings.*,
-             rooms.room_title,
-             users.fullname
-      FROM bookings
-      INNER JOIN rooms
-      ON bookings.room_id=rooms.id
-      INNER JOIN users
-      ON bookings.customer_id=users.id";
-
-if(isset($_GET['search']) && $_GET['search']!="")
+if(isset($_GET['search']))
 {
     $search=mysqli_real_escape_string($conn,$_GET['search']);
 
-    $sql.=" WHERE rooms.room_title LIKE '%$search%'
-          OR users.fullname LIKE '%$search%'
-          OR bookings.status LIKE '%$search%'";
+    $sql="SELECT * FROM locations
+          WHERE city LIKE '%$search%'
+          OR area LIKE '%$search%'
+          ORDER BY id DESC";
 }
-
-$sql.=" ORDER BY bookings.id DESC";
+else
+{
+    $sql="SELECT * FROM locations
+          ORDER BY id DESC";
+}
 
 $result=mysqli_query($conn,$sql);
-
-if(!$result)
-{
-    die("SQL Error : ".mysqli_error($conn));
-}
 ?>
 
 <!DOCTYPE html>
@@ -46,7 +36,7 @@ if(!$result)
 
 <meta charset="UTF-8">
 
-<title>Manage Bookings</title>
+<title>Manage Locations</title>
 
 <style>
 
@@ -61,8 +51,11 @@ body{
 background:#f4f4f4;
 }
 
+/* Top Bar */
+
 .top-bar{
 background:#0F4C81;
+color:white;
 padding:18px 30px;
 display:flex;
 justify-content:space-between;
@@ -70,7 +63,6 @@ align-items:center;
 }
 
 .top-bar h2{
-color:white;
 font-size:30px;
 }
 
@@ -88,32 +80,14 @@ background:#FFD700;
 color:black;
 }
 
+/* Container */
+
 .container{
 width:95%;
 margin:30px auto;
 }
 
-/* Success Message */
-
-.success{
-background:#d4edda;
-color:#155724;
-padding:12px;
-margin-bottom:20px;
-border-radius:5px;
-border:1px solid #c3e6cb;
-}
-
-/* Error Message */
-
-.error{
-background:#f8d7da;
-color:#721c24;
-padding:12px;
-margin-bottom:20px;
-border-radius:5px;
-border:1px solid #f5c6cb;
-}
+/* Search */
 
 .top{
 display:flex;
@@ -123,8 +97,9 @@ margin-bottom:20px;
 }
 
 .search-box input{
-width:300px;
 padding:10px;
+width:300px;
+border:1px solid #ccc;
 }
 
 .search-box button{
@@ -134,6 +109,20 @@ color:white;
 border:none;
 cursor:pointer;
 }
+
+.btn-add{
+background:green;
+color:white;
+text-decoration:none;
+padding:10px 20px;
+border-radius:4px;
+}
+
+.btn-add:hover{
+background:#006400;
+}
+
+/* Table */
 
 table{
 width:100%;
@@ -148,26 +137,36 @@ padding:12px;
 }
 
 table td{
-padding:12px;
 border:1px solid #ddd;
+padding:12px;
 text-align:center;
 }
+
+/* Buttons */
 
 .edit-btn{
 background:green;
 color:white;
-padding:6px 14px;
 text-decoration:none;
+padding:6px 14px;
 border-radius:4px;
 }
 
 .delete-btn{
 background:red;
 color:white;
-padding:6px 14px;
 text-decoration:none;
+padding:6px 14px;
 border-radius:4px;
 margin-left:5px;
+}
+
+.edit-btn:hover{
+background:#006400;
+}
+
+.delete-btn:hover{
+background:#cc0000;
 }
 
 .back-btn{
@@ -175,8 +174,12 @@ display:inline-block;
 margin-top:20px;
 background:#222;
 color:white;
-padding:10px 20px;
 text-decoration:none;
+padding:10px 20px;
+}
+
+.back-btn:hover{
+background:black;
 }
 
 </style>
@@ -187,7 +190,7 @@ text-decoration:none;
 
 <div class="top-bar">
 
-<h2>Manage Bookings</h2>
+<h2>Manage Locations</h2>
 
 <a href="dashboard.php" class="dashboard-btn">
 🏠 Dashboard
@@ -197,18 +200,6 @@ text-decoration:none;
 
 <div class="container">
 
-<?php
-if(isset($_GET['success']))
-{
-    echo "<div class='success'>".$_GET['success']."</div>";
-}
-
-if(isset($_GET['error']))
-{
-    echo "<div class='error'>".$_GET['error']."</div>";
-}
-?>
-
 <div class="top">
 
 <form method="GET" class="search-box">
@@ -216,7 +207,7 @@ if(isset($_GET['error']))
 <input
 type="text"
 name="search"
-placeholder="Search Booking"
+placeholder="Search City or Area"
 value="<?php echo htmlspecialchars($search); ?>">
 
 <button type="submit">
@@ -225,22 +216,26 @@ Search
 
 </form>
 
+<a href="add_location.php" class="btn-add">
++ Add Location
+</a>
+
 </div>
 
 <table>
 
 <tr>
 
-<th>ID</th>
-<th>Customer</th>
-<th>Room</th>
-<th>Booking Date</th>
-<th>Status</th>
-
+<th>Sr.No</th>
+<th>City</th>
+<th>Area</th>
+<th>Action</th>
 
 </tr>
 
 <?php
+
+$sr=1;
 
 if(mysqli_num_rows($result)>0)
 {
@@ -252,17 +247,28 @@ while($row=mysqli_fetch_assoc($result))
 
 <tr>
 
-<td><?php echo $row['id']; ?></td>
+<td><?php echo $sr++; ?></td>
 
-<td><?php echo htmlspecialchars($row['fullname']); ?></td>
+<td><?php echo htmlspecialchars($row['city']); ?></td>
 
-<td><?php echo htmlspecialchars($row['room_title']); ?></td>
+<td><?php echo htmlspecialchars($row['area']); ?></td>
 
-<td><?php echo $row['booking_date']; ?></td>
+<td>
 
-<td><?php echo htmlspecialchars($row['status']); ?></td>
+<a
+class="edit-btn"
+href="edit_location.php?id=<?php echo $row['id']; ?>">
+Edit
+</a>
 
+<a
+class="delete-btn"
+href="delete_location.php?id=<?php echo $row['id']; ?>"
+onclick="return confirm('Delete this location?')">
+Delete
+</a>
 
+</td>
 
 </tr>
 
@@ -278,9 +284,9 @@ else
 
 <tr>
 
-<td colspan="6">
+<td colspan="4">
 
-No Bookings Found
+No Locations Found
 
 </td>
 
@@ -303,5 +309,4 @@ No Bookings Found
 </div>
 
 </body>
-
 </html>
